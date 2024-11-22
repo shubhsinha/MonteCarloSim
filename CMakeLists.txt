@@ -1,34 +1,48 @@
 cmake_minimum_required(VERSION 3.10)
 project(MonteCarloSim)
 
-# Set C++ standard
+# Set the C++ standard to C++11 or newer
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# Find packages for GLFW and OpenGL
+# Set the include directories for the project
+include_directories(${PROJECT_SOURCE_DIR}/src/include)
+include_directories(${PROJECT_SOURCE_DIR}/imgui)
+include_directories(${PROJECT_SOURCE_DIR}/src/include/glad)  # Include directory for glad.h
+
+# Find the source files in their respective folders
+file(GLOB PARTICLE_SRC "${PROJECT_SOURCE_DIR}/src/simulation/Particle.cpp")
+file(GLOB BOX_SRC "${PROJECT_SOURCE_DIR}/src/simulation/Box.cpp")
+file(GLOB SIMULATION_SRC "${PROJECT_SOURCE_DIR}/src/simulation/Simulation.cpp")
+file(GLOB RENDERER_SRC "${PROJECT_SOURCE_DIR}/src/rendering/Renderer.cpp")
+file(GLOB MAIN_SRC "${PROJECT_SOURCE_DIR}/src/main.cpp")
+
+# Glad source file for OpenGL loader
+set(GLAD_SRC "${PROJECT_SOURCE_DIR}/src/glad.c")  # Correct location of glad.c
+
+# List of all source files to be compiled
+set(SOURCES
+    ${PARTICLE_SRC}
+    ${BOX_SRC}
+    ${SIMULATION_SRC}
+    ${RENDERER_SRC}
+    ${MAIN_SRC}
+    ${GLAD_SRC}
+    imgui/backends/imgui_impl_glfw.cpp
+    imgui/backends/imgui_impl_opengl3.cpp
+    imgui/imgui.cpp
+    imgui/imgui_draw.cpp
+    imgui/imgui_widgets.cpp
+    imgui/imgui_tables.cpp
+)
+
+# Find necessary packages like OpenGL and GLFW
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED)
 
-# If CMake has trouble finding glfw3, you can help it by adding the following line:
-# list(APPEND CMAKE_PREFIX_PATH "C:/msys64/mingw64")
+# Define executable
+add_executable(MonteCarloSim ${SOURCES})
 
-# Include directories for Dear ImGui, GLAD, and backends
-include_directories(imgui imgui/backends src/include)  # Add src/include for GLAD headers
+# Link the libraries in the correct order
+target_link_libraries(MonteCarloSim ${OPENGL_LIBRARIES} glfw)
 
-# Add source files for Dear ImGui and GLAD
-set(IMGUI_FILES
-    imgui/imgui.cpp
-    imgui/imgui_draw.cpp
-    imgui/imgui_tables.cpp
-    imgui/imgui_widgets.cpp
-    imgui/backends/imgui_impl_glfw.cpp
-    imgui/backends/imgui_impl_opengl3.cpp
-)
-
-# Add glad.c to the source files
-set(GLAD_SRC src/glad.c)
-
-# Add executable
-add_executable(MonteCarloSim src/main.cpp ${IMGUI_FILES} ${GLAD_SRC})
-
-# Link libraries
-target_link_libraries(MonteCarloSim glfw OpenGL::GL)

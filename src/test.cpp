@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <deque>  
 #include "../imgui/imgui.h"      // Include ImGui headers after GLAD and GLFW
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
@@ -63,7 +64,6 @@ public:
         particle.z -= size * floor(particle.z / size);
     }
 
-    // Mark this method as const
     Particle& getParticle(int index) const {
         return const_cast<Particle&>(particles[index]);
     }
@@ -86,14 +86,16 @@ private:
     Box box;
     int numParticles;
     int numSteps;
+    int intervalSteps;
     double beta;
+    std::deque<std::pair<int, std::vector<Particle>>> savedSteps; // Container to store the states of particles along with the step number
 
 public:
     Simulation(int particles, int steps, double temperature, double box_size)
-        : box(box_size), numParticles(particles), numSteps(steps), beta(1.0 / temperature) {}
+        : box(box_size), numParticles(particles), numSteps(steps), intervalSteps(1), beta(1.0 / temperature) {}
 
     void initialize() {
-        box.clearParticles();  // Clear existing particles
+        box.clearParticles();
         std::srand(std::time(nullptr));
         for (int i = 0; i < numParticles; i++) {
             double x = static_cast<double>(std::rand()) / RAND_MAX * box.getSize();
@@ -101,34 +103,95 @@ public:
             double z = static_cast<double>(std::rand()) / RAND_MAX * box.getSize();
             box.addParticle(Particle(x, y, z));
         }
+        savedSteps.clear(); // Clear any previously stored states
+
+        // Save initial state at timestep 0
+        std::vector<Particle> initialParticles;
+        for (size_t i = 0; i < box.getParticleCount(); ++i) {
+            initialParticles.push_back(box.getParticle(i));
+        }
+        savedSteps.push_back({0, initialParticles});
     }
 
     void run() {
-        for (int step = 0; step < numSteps; step++) {
-            int i = std::rand() % numParticles;
-            Particle& particle = box.getParticle(i);
-            double oldX = particle.x;
-            double oldY = particle.y;
-            double oldZ = particle.z;
-            double dx = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-            double dy = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-            double dz = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-            particle.move(dx, dy, dz);
-            box.applyPeriodicBoundaryConditions(particle);
-            double oldEnergy = box.calculateTotalEnergy();
+    savedSteps.clear(); // Clear saved steps from previous runs
+
+    // Save the initial state at timestep 0
+    std::vector<Particle> initialParticles;
+    for (size_t i = 0; i < box.getParticleCount(); ++i) {
+        initialParticles.push_back(box.getParticle(i));
+    }
+    savedSteps.push_back({0, initialParticles});
+
+    // Now continue with the rest of the simulation
+    for (int step = 1; step <= numSteps; step++) {
+        int i = std::rand() % numParticles;
+        Particle& particle = box.getParticle(i);
+        double oldX = particle.x;
+        double oldY = particle.y;
+        double oldZ = particle.z;
+        double dx = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+        double dy = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+        double dz = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
+        particle.move(dx, dy, dz);
+        box.applyPeriodicBoundaryConditions(particle);
+        double oldEnergy = box.calculateTotalEnergy();
+        particle.x = oldX;
+        particle.y = oldY;
+        particle.z = oldZ;
+        double newEnergy = box.calculateTotalEnergy();
+        double dE = newEnergy - oldEnergy;
+        if (dE > 0 && exp(-beta * dE) < static_cast<double>(std::rand()) / RAND_MAX) {
             particle.x = oldX;
             particle.y = oldY;
             particle.z = oldZ;
-            double newEnergy = box.calculateTotalEnergy();
-            double dE = newEnergy - oldEnergy;
-            if (dE > 0 && exp(-beta * dE) < static_cast<double>(std::rand()) / RAND_MAX) {
-                particle.x = oldX;
-                particle.y = oldY;
-                particle.z = oldZ;
-            } else {
-                particle.move(dx, dy, dz);
+        } else {
+            particle.move(dx, dy, dz);
+        }
+
+        // Save state every intervalStep
+        if (step % intervalSteps == 0 || step == numSteps) {
+            std::vector<Particle> currentStepParticles;
+            for (size_t i = 0; i < box.getParticleCount(); ++i) {
+                currentStepParticles.push_back(box.getParticle(i));
+            }
+            savedSteps.push_back({step, currentStepParticles}); // Save the step number along with particles
+        }
+    }
+}
+
+
+    void saveParticles(const std::string& filename) const {
+        std::ofstream file(filename, std::ios::app); // Append mode for saving
+        if (!file.is_open()) {
+            std::cerr << "Error opening file " << filename << std::endl;
+            return;
+        }
+
+        for (const auto& stepData : savedSteps) {
+            int stepNumber = stepData.first;
+            const std::vector<Particle>& particles = stepData.second;
+
+            file << "ITEM: TIMESTEP\n";
+            file << stepNumber << "\n";
+            file << "ITEM: NUMBER OF ATOMS\n";
+            file << particles.size() << "\n";
+            file << "ITEM: BOX BOUNDS pp pp pp\n";
+            file << "0 " << box.getSize() << "\n";
+            file << "0 " << box.getSize() << "\n";
+            file << "0 " << box.getSize() << "\n";
+            file << "ITEM: ATOMS id x y z\n";
+
+            for (size_t i = 0; i < particles.size(); ++i) {
+                const Particle& p = particles[i];
+                file << (i + 1) << " " << p.x << " " << p.y << " " << p.z << "\n";
             }
         }
+        file.close();
+    }
+
+    void setIntervalSteps(int interval) {
+        intervalSteps = interval;
     }
 
     int getNumParticles() const { return numParticles; }
@@ -141,144 +204,114 @@ public:
     void setTemperature(double temp) { beta = 1.0 / temp; }
 
     Box& getBox() { return box; }
-
-    // Function to save the particle data to a dump file
-    void saveParticles(const std::string& filename) {
-        std::ofstream file(filename);
-        if (!file.is_open()) {
-            std::cerr << "Error opening file " << filename << std::endl;
-            return;
-        }
-
-        file << "ITEM: TIMESTEP\n";
-        file << "0\n"; // Time step (usually incremented in MD simulations)
-        file << "ITEM: NUMBER OF ATOMS\n";
-        file << box.getParticleCount() << "\n";
-        file << "ITEM: BOX BOUNDS pp pp pp\n";
-        file << "0 " << box.getSize() << "\n";
-        file << "0 " << box.getSize() << "\n";
-        file << "0 " << box.getSize() << "\n";
-        file << "ITEM: ATOMS id x y z\n";
-
-        for (size_t i = 0; i < box.getParticleCount(); ++i) {
-            const Particle& p = box.getParticle(i);
-            file << (i + 1) << " " << p.x << " " << p.y << " " << p.z << "\n";
-        }
-
-        file.close();
-    }
 };
 
-// Function to render particles as points
+
+
+
 void renderParticles(const Box& box) {
-    glPointSize(5.0f);  // Set the point size
-    glBegin(GL_POINTS); // Start drawing points
+    glPointSize(5.0f);  
+    glEnable(GL_POINT_SMOOTH); // Enable smooth round points
+    glBegin(GL_POINTS); 
+
+    double halfBoxSize = box.getSize() / 2.0;
 
     for (size_t i = 0; i < box.getParticleCount(); ++i) {
         const Particle& p = box.getParticle(i);
-
-        glColor3f(0.0f, 0.0f, 0.0f); // Set color to black
-        glVertex3f(p.x / box.getSize(), p.y / box.getSize(), p.z / box.getSize()); // Normalize positions
+        glColor3f(1.0f, 1.0f, 1.0f); 
+        glVertex3f((p.x - halfBoxSize) / halfBoxSize, 
+                   (p.y - halfBoxSize) / halfBoxSize, 
+                   (p.z - halfBoxSize) / halfBoxSize);
     }
 
     glEnd();
 }
 
 int main() {
-    // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
         return -1;
     }
 
-    // Create a windowed mode window and its OpenGL context
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Monte Carlo Simulation", NULL, NULL);
     if (!window) {
         glfwTerminate();
         return -1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(1);
 
-    // Initialize OpenGL loader (GLAD)
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize OpenGL context\n";
         return -1;
     }
 
-    // Initialize ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui::StyleColorsDark();
 
-    // Setup Platform/Renderer bindings
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
     Simulation simulation(100, 10000, 1.0, 10.0);
     simulation.initialize();
 
-    // Variables for the filename input
-    char filename[128] = "particles.dump"; // Default filename
+    char filename[128] = "particles.dump";
+    int intervalSteps = 10;
 
     while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+    glfwPollEvents();
 
-        // Start the ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 
-        // Create ImGui window
-        ImGui::Begin("Monte Carlo Simulation");
+    ImGui::Begin("Monte Carlo Simulation");
 
-        static int numParticles = simulation.getNumParticles();
-        static int numSteps = simulation.getNumSteps();
-        static double temperature = simulation.getTemperature();
+    static int numParticles = simulation.getNumParticles();
+    static int numSteps = simulation.getNumSteps();
+    static double temperature = simulation.getTemperature();
 
-        ImGui::InputInt("Number of Particles", &numParticles);
-        ImGui::InputInt("Number of Steps", &numSteps);
-        ImGui::InputDouble("Temperature", &temperature);
+    ImGui::InputInt("Number of Particles", &numParticles);
+    ImGui::InputInt("Number of Steps", &numSteps);
+    ImGui::InputDouble("Temperature", &temperature);
+    ImGui::InputInt("Interval of Steps", &intervalSteps); 
+    ImGui::InputText("Filename", filename, IM_ARRAYSIZE(filename));
 
-        if (ImGui::Button("Initialize")) {
-            simulation.setNumParticles(numParticles);
-            simulation.setNumSteps(numSteps);
-            simulation.setTemperature(temperature);
-            simulation.initialize();
-        }
-
-        if (ImGui::Button("Run Simulation")) {
-            simulation.run();
-        }
-
-        // Input field for the dump file name
-        ImGui::InputText("Filename", filename, IM_ARRAYSIZE(filename));
-
-        // Button to save particles to the dump file
-        if (ImGui::Button("Save Dump")) {
-            simulation.saveParticles(filename);
-        }
-
-        ImGui::End();
-
-        // Rendering
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // Render the particles
-        renderParticles(simulation.getBox());
-
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(window);
+    if (ImGui::Button("Initialize")) {
+        simulation.setNumParticles(numParticles);
+        simulation.setNumSteps(numSteps);
+        simulation.setTemperature(temperature);
+        simulation.setIntervalSteps(intervalSteps); 
+        simulation.initialize();
     }
 
-    // Cleanup
+    if (ImGui::Button("Run Simulation")) {
+        simulation.run();  // No longer passing `filename`
+    }
+
+    if (ImGui::Button("Save Dump")) {
+        simulation.saveParticles(filename);
+    }
+
+    ImGui::End();
+
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    renderParticles(simulation.getBox());
+
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    glfwSwapBuffers(window);
+}
+
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -287,5 +320,3 @@ int main() {
 
     return 0;
 }
-
-
