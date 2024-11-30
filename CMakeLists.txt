@@ -16,6 +16,7 @@ file(GLOB BOX_SRC "${PROJECT_SOURCE_DIR}/src/simulation/Box.cpp")
 file(GLOB SIMULATION_SRC "${PROJECT_SOURCE_DIR}/src/simulation/Simulation.cpp")
 file(GLOB RENDERER_SRC "${PROJECT_SOURCE_DIR}/src/rendering/Renderer.cpp")
 file(GLOB MAIN_SRC "${PROJECT_SOURCE_DIR}/src/main.cpp")
+file(GLOB COLORUTILS_SRC "${PROJECT_SOURCE_DIR}/src/ColorUtils.cpp")  # ColorUtils source file
 
 # Glad source file for OpenGL loader
 set(GLAD_SRC "${PROJECT_SOURCE_DIR}/src/glad.c")  # Correct location of glad.c
@@ -28,6 +29,7 @@ set(SOURCES
     ${RENDERER_SRC}
     ${MAIN_SRC}
     ${GLAD_SRC}
+    ${COLORUTILS_SRC}  # Include ColorUtils.cpp
     imgui/backends/imgui_impl_glfw.cpp
     imgui/backends/imgui_impl_opengl3.cpp
     imgui/imgui.cpp
@@ -45,4 +47,3 @@ add_executable(MonteCarloSim ${SOURCES})
 
 # Link the libraries in the correct order
 target_link_libraries(MonteCarloSim ${OPENGL_LIBRARIES} glfw)
-
