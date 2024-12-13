@@ -7,6 +7,65 @@
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
 
+void createMenuBar() {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("New")) {
+                // Action for New
+                std::cout << "New File selected\n";
+            }
+            if (ImGui::MenuItem("Open")) {
+                // Action for Open
+                std::cout << "Open File selected\n";
+            }
+            if (ImGui::MenuItem("Save")) {
+                // Action for Save
+                std::cout << "Save File selected\n";
+            }
+            if (ImGui::MenuItem("Print")) {
+                // Action for Print
+                std::cout << "Print selected\n";
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Edit")) {
+            if (ImGui::MenuItem("Cut")) {
+                // Action for Cut
+                std::cout << "Cut selected\n";
+            }
+            if (ImGui::MenuItem("Copy")) {
+                // Action for Copy
+                std::cout << "Copy selected\n";
+            }
+            if (ImGui::MenuItem("Paste")) {
+                // Action for Paste
+                std::cout << "Paste selected\n";
+            }
+            if (ImGui::MenuItem("Undo")) {
+                // Action for Undo
+                std::cout << "Undo selected\n";
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("Documentation")) {
+                // Open documentation
+                std::cout << "Documentation selected\n";
+            }
+            if (ImGui::MenuItem("Support")) {
+                // Open support
+                std::cout << "Support selected\n";
+            }
+            if (ImGui::MenuItem("About")) {
+                // Display about info
+                std::cout << "About selected\n";
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+}
+
 int main() {
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
@@ -39,6 +98,7 @@ int main() {
 
     char filename[128] = "particles.dump";
     int intervalSteps = 10;
+    bool isRunning = false;  // Toggle for simulation
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -47,6 +107,10 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Top menu bar
+        createMenuBar();
+
+        // Control panel
         ImGui::Begin("Monte Carlo Simulation");
 
         static int numParticles = simulation.getNumParticles();
@@ -67,8 +131,8 @@ int main() {
             simulation.initialize();
         }
 
-        if (ImGui::Button("Run Simulation")) {
-            simulation.run();
+        if (ImGui::Button(isRunning ? "Pause Simulation" : "Run Simulation")) {
+            isRunning = !isRunning;
         }
 
         if (ImGui::Button("Save Dump")) {
@@ -77,17 +141,24 @@ int main() {
 
         ImGui::End();
 
+        // Render particles and update simulation
+        if (isRunning) {
+            simulation.run(1);  // Run one simulation step
+        }
+
+        // OpenGL rendering
         ImGui::Render();
         int display_w, display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.00f);
+        glClearColor(0.1098f, 0.1725f, 0.2980f, 1.0f);  // Background color #1c2c4c
         glClear(GL_COLOR_BUFFER_BIT);
 
-        renderParticles(simulation.getBox());
+
+
+        renderParticles(simulation.getBox());  // Render current particle states
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
         glfwSwapBuffers(window);
     }
 
