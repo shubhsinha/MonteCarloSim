@@ -17,9 +17,17 @@ private:
 
 public:
     Simulation(int particles, int steps, double temperature, double box_size);
+
+    // Initialization and execution
     void initialize();
-    void run();
+    void step();                      // Perform a single simulation step
+    void run(int stepsToRun = 1);     // Run a specific number of steps
+
+    // Data saving and retrieval
     void saveParticles(const std::string& filename) const;
+    const std::vector<Particle>& getCurrentParticles() const; // Get current particle states for rendering
+
+    // Parameter setters and getters
     void setIntervalSteps(int interval);
     int getNumParticles() const;
     void setNumParticles(int num);
@@ -27,6 +35,8 @@ public:
     void setNumSteps(int steps);
     double getTemperature() const;
     void setTemperature(double temp);
+
+    // Access to the simulation box
     Box& getBox();
 };
 

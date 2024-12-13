@@ -5,11 +5,11 @@
 #include <ctime>
 #include <cmath>
 
-// Constructor (already implemented)
+// Constructor
 Simulation::Simulation(int particles, int steps, double temperature, double box_size)
     : box(box_size), numParticles(particles), numSteps(steps), intervalSteps(1), beta(1.0 / temperature) {}
 
-// Initialize particles (already implemented)
+// Initialize particles
 void Simulation::initialize() {
     box.clearParticles();
     std::srand(std::time(nullptr));
@@ -21,6 +21,7 @@ void Simulation::initialize() {
     }
     savedSteps.clear();
 
+    // Save initial state
     std::vector<Particle> initialParticles;
     for (size_t i = 0; i < box.getParticleCount(); ++i) {
         initialParticles.push_back(box.getParticle(i));
@@ -28,34 +29,40 @@ void Simulation::initialize() {
     savedSteps.push_back({0, initialParticles});
 }
 
-// Run the simulation (already implemented)
-void Simulation::run() {
-    savedSteps.clear();
-    std::vector<Particle> initialParticles;
-    for (size_t i = 0; i < box.getParticleCount(); ++i) {
-        initialParticles.push_back(box.getParticle(i));
+// Perform a single step of the simulation
+void Simulation::step() {
+    int i = std::rand() % numParticles;
+    Particle& particle = box.getParticle(i);
+    double oldX = particle.x, oldY = particle.y, oldZ = particle.z;
+
+    // Random displacement with scaling for smoother motion
+    double dx = (static_cast<double>(std::rand()) / RAND_MAX - 0.5) * 0.1;
+    double dy = (static_cast<double>(std::rand()) / RAND_MAX - 0.5) * 0.1;
+    double dz = (static_cast<double>(std::rand()) / RAND_MAX - 0.5) * 0.1;
+
+    particle.move(dx, dy, dz);
+    box.applyPeriodicBoundaryConditions(particle);
+
+    // Energy calculation
+    double oldEnergy = box.calculateTotalEnergy();
+    particle.x = oldX, particle.y = oldY, particle.z = oldZ;
+    double newEnergy = box.calculateTotalEnergy();
+    double dE = newEnergy - oldEnergy;
+
+    // Metropolis criterion
+    if (dE > 0 && exp(-beta * dE) < static_cast<double>(std::rand()) / RAND_MAX) {
+        particle.x = oldX, particle.y = oldY, particle.z = oldZ; // Reject move
+    } else {
+        particle.move(dx, dy, dz); // Accept move
     }
-    savedSteps.push_back({0, initialParticles});
+}
 
-    for (int step = 1; step <= numSteps; step++) {
-        int i = std::rand() % numParticles;
-        Particle& particle = box.getParticle(i);
-        double oldX = particle.x, oldY = particle.y, oldZ = particle.z;
-        double dx = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-        double dy = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-        double dz = (static_cast<double>(std::rand()) / RAND_MAX - 0.5);
-        particle.move(dx, dy, dz);
-        box.applyPeriodicBoundaryConditions(particle);
-        double oldEnergy = box.calculateTotalEnergy();
-        particle.x = oldX, particle.y = oldY, particle.z = oldZ;
-        double newEnergy = box.calculateTotalEnergy();
-        double dE = newEnergy - oldEnergy;
-        if (dE > 0 && exp(-beta * dE) < static_cast<double>(std::rand()) / RAND_MAX) {
-            particle.x = oldX, particle.y = oldY, particle.z = oldZ;
-        } else {
-            particle.move(dx, dy, dz);
-        }
+// Run simulation for a specific number of steps
+void Simulation::run(int stepsToRun) {
+    for (int step = 1; step <= stepsToRun; step++) {
+        this->step();
 
+        // Save state at intervals
         if (step % intervalSteps == 0 || step == numSteps) {
             std::vector<Particle> currentStepParticles;
             for (size_t i = 0; i < box.getParticleCount(); ++i) {
@@ -66,7 +73,7 @@ void Simulation::run() {
     }
 }
 
-// Save particle states to file (already implemented)
+// Save particle states to file
 void Simulation::saveParticles(const std::string& filename) const {
     std::ofstream file(filename, std::ios::app);
     if (!file.is_open()) {
@@ -92,8 +99,12 @@ void Simulation::saveParticles(const std::string& filename) const {
     file.close();
 }
 
-// Missing Getter and Setter Methods Implementation
+// Get current particles (for rendering)
+const std::vector<Particle>& Simulation::getCurrentParticles() const {
+    return savedSteps.back().second;
+}
 
+// Setter and getter methods
 int Simulation::getNumParticles() const {
     return numParticles;
 }
